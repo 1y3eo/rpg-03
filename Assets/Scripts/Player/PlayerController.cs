@@ -1,36 +1,37 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.InputSystem;
 
-public class PlayerController : MonoBehaviour
+public class PlayerController : Singleton<PlayerController>
 {
-    public bool FacingLeft { get { return facingLeft; } }
-    public static PlayerController Instance;
 
+    public bool FacingLeft { get { return facingLeft; } }
     [SerializeField] private float moveSpeed = 1f;
     [SerializeField] private float dashSpeed = 4f;
-
     [SerializeField] private TrailRenderer myTrailRenderer;
+    [SerializeField] private Transform weaponCollider;
 
     private PlayerControls playerControls;
     private Vector2 movement;
     private Rigidbody2D rb;
     private Animator myAnimator;
-    private SpriteRenderer mySpriteRenderer;
+    private SpriteRenderer mySprtieRenderer;
+    private KnockBack knockBack;
     private float startingMoveSpeed;
 
     private bool facingLeft = false;
     private bool isDashing = false;
 
 
-    private void Awake()
+    protected override void Awake()
     {
-        Instance = this;
+        base.Awake();
+
         playerControls = new PlayerControls();
         rb = GetComponent<Rigidbody2D>();
         myAnimator = GetComponent<Animator>();
-        mySpriteRenderer = GetComponent<SpriteRenderer>();
+        mySprtieRenderer = GetComponent<SpriteRenderer>();
+        knockBack = GetComponent<KnockBack>();
     }
 
     private void Start()
@@ -38,6 +39,7 @@ public class PlayerController : MonoBehaviour
         playerControls.Combat.Dash.performed += _ => Dash();
 
         startingMoveSpeed = moveSpeed;
+        ActiveInventory.Instance.EquipStartingWeapon();
     }
 
     private void OnEnable()
@@ -45,7 +47,12 @@ public class PlayerController : MonoBehaviour
         playerControls.Enable();
     }
 
-    private void Update()
+    private void OnDisable()
+    {
+        playerControls.Disable();
+    }
+
+    void Update()
     {
         PlayerInput();
     }
@@ -54,6 +61,11 @@ public class PlayerController : MonoBehaviour
     {
         AdjustPlayerFacingDirection();
         Move();
+    }
+
+    public Transform GetWeaponCollider()
+    {
+        return weaponCollider;
     }
 
     private void PlayerInput()
@@ -66,6 +78,7 @@ public class PlayerController : MonoBehaviour
 
     private void Move()
     {
+        if (knockBack.GettingKnockedBack || PlayerHealth.Instance.IsDead) { return; }
         rb.MovePosition(rb.position + movement * (moveSpeed * Time.fixedDeltaTime));
     }
 
@@ -74,23 +87,24 @@ public class PlayerController : MonoBehaviour
         Vector3 mousePos = Input.mousePosition;
         Vector3 playerScreenPoint = Camera.main.WorldToScreenPoint(transform.position);
 
-
         if (mousePos.x < playerScreenPoint.x)
         {
-            mySpriteRenderer.flipX = true;
+            mySprtieRenderer.flipX = true;
             facingLeft = true;
         }
         else
         {
-            mySpriteRenderer.flipX = false;
+            mySprtieRenderer.flipX = false;
             facingLeft = false;
         }
     }
 
+
     private void Dash()
     {
-        if (!isDashing)
+        if (!isDashing && Stamina.Instance.CurrentStamina > 0)
         {
+            Stamina.Instance.UseStamina();
             isDashing = true;
             moveSpeed *= dashSpeed;
             myTrailRenderer.emitting = true;
